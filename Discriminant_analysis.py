@@ -2,57 +2,61 @@ import pandas as pd
 import numpy as np
 
 import sklearn.preprocessing as skl_pre
-#import sklearn.linear_model as skl_lm
 import sklearn.discriminant_analysis as skl_da
-#import sklearn.neighbors as skl_nb
 import sklearn.model_selection as skl_ms
 import sklearn.metrics as skl_m
 
-import seaborn as snus
+import seaborn as sb
 from matplotlib import pyplot as plt
 
 data = pd.read_csv('training_data_vt2025.csv').reset_index()
 
-data = pd.read_csv('training_data_vt2025.csv').reset_index()
-data['windspeed'] = data['windspeed']>25
 data['workday'] = data['weekday'] & ~data['holiday']
+data['daynight'] = 2*((data['hour_of_day'] < 21) & (data['hour_of_day'] > 14))+((data['hour_of_day']<15)&(data['hour_of_day']>7))
+data['precipitation'] = 2*(data['precip']<4)+((data['precip']<0.5) & (data['precip']>0.1))
 
 inLabels = [
-    'hour_of_day',
-    'day_of_week',
-    'month',
+    #'hour_of_day',
+    #'day_of_week', #bra för precision
+    #'month',   #bra för precision
     #'holiday',
     #'weekday', 
-    'workday',
-    'summertime',
-    'temp',
-    'dew',
-    #'humidity',
-    #'weather',w
-    'precip',
+    'workday',  #bra för accuracy
+    #'summertime',
+    #temp',
+    'dew',  #bra för accuracy
+    'humidity', #bra för accuracy
+    #'precip',
     #'snow', bara 0
-    'snowdepth',
-    'windspeed',
-    'cloudcover',
-    'visibility',
+    #'snowdepth',
+    #'windspeed',
+    #'cloudcover',  #bra för precision
+    #'visibility',
+    'daynight'
 ]
 
 outLabels = [
     'increase_stock'
 ]
 
-train, test = skl_ms.train_test_split(data,test_size=0.2)
+train, test = skl_ms.train_test_split(data,test_size=0.5,random_state=45)
 
-reg = skl_da.QuadraticDiscriminantAnalysis(reg_param=0.1)
+reg = skl_da.QuadraticDiscriminantAnalysis()
+param = {'reg_param': np.arange(0,1,0.01)}
+
+reg = skl_ms.GridSearchCV(estimator=reg,param_grid=param, scoring='accuracy')
+
 reg.fit(train[inLabels],np.ravel(train[outLabels]))
 
 true = test[outLabels]
 pred = reg.predict(test[inLabels])
 
-cm = skl_m.confusion_matrix(true,pred)
-print(skl_m.accuracy_score(true,pred))
+print(reg.best_params_)
+print(f'accuracy score: {reg.score(test[inLabels],true)}')
+print(f'f1 score: {skl_m.f1_score(true,pred,pos_label="high_bike_demand")}')
+print(f'recall score: {skl_m.recall_score(true,pred,pos_label="high_bike_demand")}')
+print(f'precision score: {skl_m.precision_score(true,pred,pos_label="high_bike_demand")}')
 
-df_cm = pd.DataFrame(cm, index=['high bike demand','low bike demand'], columns=['high bike demand','low bike demand'])
-#skl_m.ConfusionMatrixDisplay(cm,display_labels=['high_bike_demand','low_bike_demand']).plot()
-snus.heatmap(df_cm,annot=True,fmt='.4g',cmap='crest').set(xlabel='predicted',ylabel='true')
+df_cm = pd.DataFrame(skl_m.confusion_matrix(true,pred), index=['high bike demand','low bike demand'], columns=['high bike demand','low bike demand'])
+sb.heatmap(df_cm,annot=True,fmt='.4g',cmap='crest').set(xlabel='predicted',ylabel='true')
 plt.show()
